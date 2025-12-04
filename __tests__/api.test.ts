@@ -1,11 +1,13 @@
+import { Test, TestingModule } from "@nestjs/testing";
+import { INestApplication, ValidationPipe } from "@nestjs/common";
 import request from "supertest";
-import { app } from "../src/index";
+import { AppModule } from "../src/app.module";
 
 /**
  * Test Suite per API REST Users
  *
  * Questi test verificano che l'implementazione rispetti le specifiche:
- * - Validazione con Zod
+ * - Validazione con class-validator
  * - Status code corretti (201, 204, 400, 404, 409)
  * - Paginazione
  * - UUID e createdAt
@@ -13,24 +15,50 @@ import { app } from "../src/index";
  */
 
 describe("Users API Tests", () => {
+  let app: INestApplication;
   let createdUserId: string;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      })
+    );
+    await app.init();
+  });
+
+  beforeEach(async () => {
+    // Clear all users before each test to avoid conflicts
+    await request(app.getHttpServer()).delete("/users");
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
 
   describe("GET /health", () => {
     it("should return 200 OK", async () => {
-      const response = await request(app).get("/health");
+      const response = await request(app.getHttpServer()).get("/health");
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty("status", "ok");
     });
   });
 
-  describe.skip("POST /users", () => {
+  describe("POST /users", () => {
     it("should create a new user with valid data and return 201", async () => {
       const newUser = {
         name: "Mario Rossi",
         email: "mario@test.com",
       };
 
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/users")
         .send(newUser)
         .expect(201);
@@ -61,12 +89,12 @@ describe("Users API Tests", () => {
         email: "test@example.com",
       };
 
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/users")
         .send(invalidUser)
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("message");
     });
 
     it("should return 400 for invalid email", async () => {
@@ -75,12 +103,12 @@ describe("Users API Tests", () => {
         email: "invalid-email",
       };
 
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/users")
         .send(invalidUser)
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("message");
     });
 
     it("should return 400 for missing name", async () => {
@@ -88,7 +116,10 @@ describe("Users API Tests", () => {
         email: "test@example.com",
       };
 
-      await request(app).post("/users").send(invalidUser).expect(400);
+      await request(app.getHttpServer())
+        .post("/users")
+        .send(invalidUser)
+        .expect(400);
     });
 
     it("should return 400 for missing email", async () => {
@@ -96,7 +127,10 @@ describe("Users API Tests", () => {
         name: "Test User",
       };
 
-      await request(app).post("/users").send(invalidUser).expect(400);
+      await request(app.getHttpServer())
+        .post("/users")
+        .send(invalidUser)
+        .expect(400);
     });
 
     it("should return 409 for duplicate email", async () => {
@@ -106,18 +140,21 @@ describe("Users API Tests", () => {
       };
 
       // Prima creazione
-      await request(app).post("/users").send(user).expect(201);
+      await request(app.getHttpServer()).post("/users").send(user).expect(201);
 
       // Tentativo di duplicazione
-      const response = await request(app).post("/users").send(user).expect(409);
+      const response = await request(app.getHttpServer())
+        .post("/users")
+        .send(user)
+        .expect(409);
 
-      expect(response.body).toHaveProperty("error");
-      expect(response.body.error).toMatch(/email/i);
+      expect(response.body).toHaveProperty("message");
+      expect(response.body.message).toMatch(/email/i);
     });
   });
 
-  describe.skip("GET /users", () => {
-    beforeAll(async () => {
+  describe("GET /users", () => {
+    it("should return paginated users list with default params", async () => {
       // Crea alcuni utenti per testare la paginazione
       const users = [
         { name: "User 1", email: "user1@test.com" },
@@ -126,71 +163,66 @@ describe("Users API Tests", () => {
       ];
 
       for (const user of users) {
-        await request(app).post("/users").send(user);
+        await request(app.getHttpServer()).post("/users").send(user);
       }
-    });
 
-    it("should return paginated users list with default params", async () => {
-      const response = await request(app).get("/users").expect(200);
+      const response = await request(app.getHttpServer())
+        .get("/users")
+        .expect(200);
 
       expect(response.body).toHaveProperty("data");
-      expect(response.body).toHaveProperty("pagination");
+      expect(response.body).toHaveProperty("total");
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.data.length).toBeGreaterThan(0);
 
       // Verifica struttura pagination
-      expect(response.body.pagination).toHaveProperty("page");
-      expect(response.body.pagination).toHaveProperty("limit");
-      expect(response.body.pagination).toHaveProperty("total");
-      expect(response.body.pagination).toHaveProperty("pages");
+      expect(response.body).toHaveProperty("page");
+      expect(response.body).toHaveProperty("limit");
+      expect(response.body).toHaveProperty("total");
     });
 
     it("should return paginated users with custom page and limit", async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get("/users")
         .query({ page: 1, limit: 2 })
         .expect(200);
 
       expect(response.body.data.length).toBeLessThanOrEqual(2);
-      expect(response.body.pagination.page).toBe(1);
-      expect(response.body.pagination.limit).toBe(2);
+      expect(response.body.page).toBe(1);
+      expect(response.body.limit).toBe(2);
     });
 
     it("should return empty data for page beyond available data", async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get("/users")
         .query({ page: 999, limit: 10 })
         .expect(200);
 
       expect(response.body.data).toHaveLength(0);
-      expect(response.body.pagination.page).toBe(999);
+      expect(response.body.page).toBe(999);
     });
 
     it("should handle invalid pagination parameters gracefully", async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get("/users")
         .query({ page: -1, limit: 0 })
         .expect(200);
 
       // Dovrebbe usare valori di default o corretti
-      expect(response.body.pagination.page).toBeGreaterThan(0);
-      expect(response.body.pagination.limit).toBeGreaterThan(0);
+      expect(response.body.page).toBeGreaterThan(0);
+      expect(response.body.limit).toBeGreaterThan(0);
     });
   });
 
-  describe.skip("GET /users/:id", () => {
-    let testUserId: string;
-
-    beforeAll(async () => {
-      // Crea un utente per i test
-      const response = await request(app)
+  describe("GET /users/:id", () => {
+    it("should return a single user by id", async () => {
+      // Crea un utente per il test
+      const createResponse = await request(app.getHttpServer())
         .post("/users")
         .send({ name: "Single User", email: "single@test.com" });
-      testUserId = response.body.id;
-    });
+      const testUserId = createResponse.body.id;
 
-    it("should return a single user by id", async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get(`/users/${testUserId}`)
         .expect(200);
 
@@ -202,53 +234,63 @@ describe("Users API Tests", () => {
 
     it("should return 404 for non-existent user id", async () => {
       const fakeId = "00000000-0000-0000-0000-000000000000";
-      const response = await request(app).get(`/users/${fakeId}`).expect(404);
+      const response = await request(app.getHttpServer())
+        .get(`/users/${fakeId}`)
+        .expect(404);
 
-      expect(response.body).toHaveProperty("error");
-      expect(response.body.error).toMatch(/not found/i);
+      expect(response.body).toHaveProperty("message");
+      expect(response.body.message).toMatch(/not found/i);
     });
 
     it("should return 404 for invalid id format", async () => {
-      await request(app).get("/users/invalid-id-123").expect(404);
+      await request(app.getHttpServer())
+        .get("/users/invalid-id-123")
+        .expect(404);
     });
   });
 
-  describe.skip("DELETE /users/:id", () => {
+  describe("DELETE /users/:id", () => {
     let userToDeleteId: string;
 
     beforeEach(async () => {
       // Crea un nuovo utente prima di ogni test di delete
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/users")
         .send({ name: "Delete Me", email: `delete-${Date.now()}@test.com` });
       userToDeleteId = response.body.id;
     });
 
     it("should delete a user and return 204", async () => {
-      await request(app).delete(`/users/${userToDeleteId}`).expect(204);
+      await request(app.getHttpServer())
+        .delete(`/users/${userToDeleteId}`)
+        .expect(204);
 
       // Verifica che l'utente sia stato eliminato
-      await request(app).get(`/users/${userToDeleteId}`).expect(404);
+      await request(app.getHttpServer())
+        .get(`/users/${userToDeleteId}`)
+        .expect(404);
     });
 
     it("should return 404 when deleting non-existent user", async () => {
       const fakeId = "00000000-0000-0000-0000-000000000000";
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .delete(`/users/${fakeId}`)
         .expect(404);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("message");
     });
 
     it("should return 404 for invalid id format on delete", async () => {
-      await request(app).delete("/users/invalid-id").expect(404);
+      await request(app.getHttpServer())
+        .delete("/users/invalid-id")
+        .expect(404);
     });
   });
 
-  describe.skip("Integration Tests", () => {
+  describe("Integration Tests", () => {
     it("should complete full CRUD cycle", async () => {
       // CREATE
-      const createResponse = await request(app)
+      const createResponse = await request(app.getHttpServer())
         .post("/users")
         .send({ name: "Full Cycle", email: "cycle@test.com" })
         .expect(201);
@@ -256,28 +298,32 @@ describe("Users API Tests", () => {
       const userId = createResponse.body.id;
 
       // READ single
-      const getResponse = await request(app)
+      const getResponse = await request(app.getHttpServer())
         .get(`/users/${userId}`)
         .expect(200);
       expect(getResponse.body.name).toBe("Full Cycle");
 
       // READ list
-      const listResponse = await request(app).get("/users").expect(200);
+      const listResponse = await request(app.getHttpServer())
+        .get("/users")
+        .expect(200);
       expect(listResponse.body.data.some((u: any) => u.id === userId)).toBe(
         true
       );
 
       // DELETE
-      await request(app).delete(`/users/${userId}`).expect(204);
+      await request(app.getHttpServer()).delete(`/users/${userId}`).expect(204);
 
       // Verify deletion
-      await request(app).get(`/users/${userId}`).expect(404);
+      await request(app.getHttpServer()).get(`/users/${userId}`).expect(404);
     });
   });
 
-  describe.skip("GET /users/active", () => {
+  describe("GET /users/active", () => {
     it("should return only active users", async () => {
-      const response = await request(app).get("/users/active").expect(200);
+      const response = await request(app.getHttpServer())
+        .get("/users/active")
+        .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
 
@@ -293,13 +339,17 @@ describe("Users API Tests", () => {
 
     it("should return empty array if no active users exist", async () => {
       // Assumendo che tutti gli utenti siano stati disattivati
-      const response = await request(app).get("/users/active").expect(200);
+      const response = await request(app.getHttpServer())
+        .get("/users/active")
+        .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
     });
 
     it("should not return legacy users without isActive property", async () => {
-      const response = await request(app).get("/users/active").expect(200);
+      const response = await request(app.getHttpServer())
+        .get("/users/active")
+        .expect(200);
 
       // Verifica che nessun utente legacy sia presente (senza isActive)
       response.body.forEach((user: any) => {
@@ -308,13 +358,13 @@ describe("Users API Tests", () => {
     });
   });
 
-  describe.skip("POST /tasks/heavy", () => {
+  describe("POST /tasks/heavy", () => {
     it("should start a heavy task on worker thread and return 202", async () => {
       const taskData = {
         iterations: 100000,
       };
 
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/tasks/heavy")
         .send(taskData)
         .expect(202);
@@ -335,12 +385,12 @@ describe("Users API Tests", () => {
         iterations: -100,
       };
 
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/tasks/heavy")
         .send(invalidTask)
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("message");
     });
 
     it("should return 400 for iterations exceeding maximum (1000000)", async () => {
@@ -348,16 +398,19 @@ describe("Users API Tests", () => {
         iterations: 2000000,
       };
 
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/tasks/heavy")
         .send(invalidTask)
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("message");
     });
 
     it("should return 400 for missing iterations field", async () => {
-      await request(app).post("/tasks/heavy").send({}).expect(400);
+      await request(app.getHttpServer())
+        .post("/tasks/heavy")
+        .send({})
+        .expect(400);
     });
 
     it("should return 400 for non-numeric iterations", async () => {
@@ -365,16 +418,19 @@ describe("Users API Tests", () => {
         iterations: "not-a-number",
       };
 
-      await request(app).post("/tasks/heavy").send(invalidTask).expect(400);
+      await request(app.getHttpServer())
+        .post("/tasks/heavy")
+        .send(invalidTask)
+        .expect(400);
     });
   });
 
-  describe.skip("GET /tasks/:taskId", () => {
+  describe("GET /tasks/:taskId", () => {
     let taskId: string;
 
     beforeAll(async () => {
       // Crea un task per i test
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .post("/tasks/heavy")
         .send({ iterations: 50000 });
       taskId = response.body.taskId;
@@ -384,7 +440,9 @@ describe("Users API Tests", () => {
       // Attendi un po' per dare tempo al worker di completare
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const response = await request(app).get(`/tasks/${taskId}`).expect(200);
+      const response = await request(app.getHttpServer())
+        .get(`/tasks/${taskId}`)
+        .expect(200);
 
       expect(response.body).toHaveProperty("taskId", taskId);
       expect(response.body).toHaveProperty("status");
@@ -404,14 +462,16 @@ describe("Users API Tests", () => {
 
     it("should return 404 for non-existent task id", async () => {
       const fakeId = "00000000-0000-0000-0000-000000000000";
-      const response = await request(app).get(`/tasks/${fakeId}`).expect(404);
+      const response = await request(app.getHttpServer())
+        .get(`/tasks/${fakeId}`)
+        .expect(404);
 
-      expect(response.body).toHaveProperty("error");
-      expect(response.body.error).toMatch(/not found/i);
+      expect(response.body).toHaveProperty("message");
+      expect(response.body.message).toMatch(/not found/i);
     });
 
     it("should return 404 for invalid task id format", async () => {
-      await request(app).get("/tasks/invalid-id-123").expect(404);
+      await request(app.getHttpServer()).get("/tasks/invalid-id").expect(404);
     });
   });
 });

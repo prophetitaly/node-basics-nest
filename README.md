@@ -1,7 +1,7 @@
-# ESERCIZIO PRATICO Node.js COMPLETO
+# ESERCIZIO PRATICO Node.js con NestJS
 
 **Obiettivo:** Creare API REST minimale con validazione, errori e logging  
-**Stack:** Express + UUID + Validazione (Zod/Joi/Manuale)
+**Stack:** NestJS + UUID + Validazione (class-validator)
 
 ---
 
@@ -60,23 +60,27 @@ npm install
 
 # Avvia server in modalità sviluppo
 npm run dev
+
+# Oppure con watch mode
+npm run start:dev
 ```
 
-**File di partenza:** `index.ts`
+**Struttura del progetto NestJS:**
 
-```typescript
-import express, { Request, Response, NextFunction } from "express";
-
-const app = express();
-app.use(express.json());
-
-const PORT = 3000;
-
-// === IL TUO CODICE QUI ===
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server on http://localhost:${PORT}`);
-});
+```
+src/
+├── main.ts              # Entry point dell'applicazione
+├── app.module.ts        # Modulo principale
+├── health/
+│   └── health.controller.ts  # Health check endpoint
+└── users/
+    ├── users.module.ts       # Modulo users
+    ├── users.controller.ts   # Controller per le routes
+    ├── users.service.ts      # Business logic
+    ├── dto/
+    │   └── create-user.dto.ts  # Data Transfer Object
+    └── entities/
+        └── user.entity.ts      # User entity/interface
 ```
 
 ---
@@ -98,17 +102,23 @@ I test Jest in `__tests__/api.test.ts` sono esempi da completare dopo l'implemen
 
 ### Runtime
 
-- `express` ^4.21.2 - Framework web
-- `zod` ^3.23.8 - Validazione schema (opzionale)
-- `joi` ^17.13.3 - Validazione schema alternativa (opzionale)
-- `uuid` ^11.0.3 - Generazione UUID
+- `@nestjs/common` ^10.3.0 - Decorators e utilities NestJS
+- `@nestjs/core` ^10.3.0 - Core framework NestJS
+- `@nestjs/platform-express` ^10.3.0 - HTTP adapter per Express
+- `class-validator` ^0.14.1 - Validazione con decorators
+- `class-transformer` ^0.5.1 - Trasformazione oggetti
+- `uuid` ^13.0.0 - Generazione UUID
+- `reflect-metadata` ^0.2.0 - Metadata reflection API
+- `rxjs` ^7.8.1 - Reactive Extensions
 
 ### Development
 
-- `typescript` ^5.7.2 - TypeScript compiler
-- `tsx` ^4.19.2 - TypeScript executor (più veloce di ts-node)
-- `jest` ^29.7.0 - Framework testing
-- `supertest` ^7.0.0 - Testing HTTP
+- `@nestjs/cli` ^10.3.0 - CLI di NestJS
+- `@nestjs/testing` ^10.3.0 - Utilities per testing
+- `typescript` ^5.9.3 - TypeScript compiler
+- `jest` ^30.2.0 - Framework testing
+- `supertest` ^7.1.4 - Testing HTTP
+- `ts-jest` ^29.4.6 - Jest transformer per TypeScript
 
 ---
 
@@ -131,33 +141,42 @@ npm run test:api
 
 ## 💡 SUGGERIMENTI
 
-1. **Validazione:** Puoi scegliere tra tre approcci:
-   - **Zod:** Validazione type-safe con TypeScript
-   - **Joi:** Validazione con API fluente e messaggi dettagliati
-   - **Manuale:** Validazione con if/else e regex (più controllo, più verbosa)
+1. **Validazione con NestJS:**
+   - Usa `class-validator` decorators nei DTO (@IsString, @IsEmail, @MinLength, etc.)
+   - ValidationPipe è già configurato globalmente in `main.ts`
+   - I messaggi di errore sono automatici e personalizzabili
 2. **UUID:** Usa `uuid.v4()` per generare ID unici
 3. **Paginazione:** Calcola offset = (page - 1) \* limit
 4. **Database Simulato:** Usa i dati in `data/users.json` come storage iniziale
-   - Puoi leggerli e modificarli in memoria
-   - Oppure implementare persistenza su file
+   - I dati vengono caricati all'avvio del servizio
+   - Le modifiche sono salvate su file automaticamente
 5. **Filtraggio Utenti Attivi:**
    - Filtra solo utenti di tipo `NewUser` con `isActive === true`
-   - Usa type guard per verificare la presenza della proprietà `isActive`
-6. **Worker Threads:** Usa `worker_threads` per task pesanti
+   - Usa type guard `isNewUser()` già definito in `user.entity.ts`
+6. **Dependency Injection:**
+   - NestJS usa DI per gestire i servizi
+   - Inietta il service nel controller tramite constructor
+   - I moduli registrano providers e controllers
+7. **Exception Handling:**
+   - Usa built-in exceptions: `NotFoundException`, `ConflictException`, `BadRequestException`
+   - NestJS converte automaticamente le exceptions in response HTTP corrette
+8. **Worker Threads:** Usa `worker_threads` per task pesanti
    - Crea un file worker separato (es. `heavy-task.worker.ts`)
+   - Crea un modulo/service dedicato per gestire i task
    - Usa `new Worker()` per lanciare il worker
    - Comunica con `postMessage` e `on('message')`
    - Memorizza lo stato dei task in una Map/oggetto
-7. **Docker:** Crea un Dockerfile per containerizzare l'applicazione
+9. **Docker:** Crea un Dockerfile per containerizzare l'applicazione
    - Usa immagine base Node.js (es. `node:22-alpine`)
-8. **Status Code:**
-   - 200 OK (GET successo)
-   - 201 Created (POST successo)
-   - 202 Accepted (Task avviato)
-   - 204 No Content (DELETE successo)
-   - 400 Bad Request (validazione fallita)
-   - 404 Not Found (risorsa non trovata)
-   - 409 Conflict (email duplicata)
+   - Build con `nest build` per produzione
+10. **Status Code:**
+    - 200 OK (GET successo)
+    - 201 Created (POST successo) - usa `@HttpCode(HttpStatus.CREATED)`
+    - 202 Accepted (Task avviato)
+    - 204 No Content (DELETE successo) - usa `@HttpCode(HttpStatus.NO_CONTENT)`
+    - 400 Bad Request (validazione fallita) - automatico con ValidationPipe
+    - 404 Not Found (risorsa non trovata) - automatico con NotFoundException
+    - 409 Conflict (email duplicata) - automatico con ConflictException
 
 ---
 
@@ -177,10 +196,12 @@ Crea un `Dockerfile` per containerizzare il web server
 
 ## 🔧 NOTE TECNICHE
 
-- **TypeScript:** Configurato con ES Modules (`type: "module"`)
-- **Target:** ESNext con moduleResolution bundler
-- **Executor:** `tsx` per sviluppo veloce
-- **Testing:** Jest con ts-jest per supporto ESM
+- **NestJS:** Framework progressivo basato su TypeScript e decorators
+- **TypeScript:** Configurato per NestJS con decorators e metadata
+- **Architettura:** Modulare con Controllers, Services, e Dependency Injection
+- **Validazione:** Automatica con class-validator e ValidationPipe
+- **Testing:** Jest con supporto NestJS Testing utilities
+- **Build:** `nest build` compila il progetto in JavaScript
 
 ---
 
