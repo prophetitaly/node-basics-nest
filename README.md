@@ -3,6 +3,136 @@
 **Obiettivo:** Creare API REST minimale con validazione, errori e logging  
 **Stack:** NestJS + UUID + Validazione (class-validator)
 
+**⚠️ IMPORTANTE:** Questo progetto è un esercizio di valutazione tecnica. La struttura base è già fornita, ma le implementazioni dei servizi devono essere completate dal candidato seguendo le specifiche sotto indicate.
+
+---
+
+## 🎯 COSA IMPLEMENTARE
+
+Il progetto ha già la struttura base configurata. Devi implementare:
+
+### 1. **UsersController** (`src/users/users.controller.ts`)
+
+Implementa gli endpoint REST:
+
+- **`POST /users`** - Crea nuovo utente
+
+  - Riceve `CreateUserDto` nel body
+  - Chiama `usersService.create()`
+  - Ritorna l'utente creato con status 201
+
+- **`GET /users`** - Lista utenti paginati
+
+  - Riceve query params `page` e `limit`
+  - Chiama `usersService.findAll(page, limit)`
+  - Ritorna oggetto con `{ data, total, page, limit }`
+
+- **`GET /users/active`** - Lista utenti attivi
+
+  - Chiama `usersService.findActive()`
+
+- **`GET /users/:id`** - Ottieni singolo utente
+
+  - Riceve `id` come param
+  - Chiama `usersService.findOne(id)`
+  - Ritorna l'utente o 404
+
+- **`DELETE /users/:id`** - Elimina utente
+
+  - Riceve `id` come param
+  - Chiama `usersService.remove(id)`
+  - Ritorna status 204 o 404
+
+- **`DELETE /users`** - Elimina tutti gli utenti
+  - Chiama `usersService.clearAll()`
+  - Ritorna status 204
+
+### 2. **UsersService** (`src/users/users.service.ts`)
+
+Implementa i seguenti metodi:
+
+- **`create(createUserDto)`** - Create a new user
+
+  - Generate UUID for id
+  - Validate email is unique (throw `ConflictException` if duplicate)
+  - Add `createdAt` timestamp
+  - Save to file and return user
+
+- **`findAll(page, limit)`** - Get paginated users
+
+  - Validate page > 0 and limit > 0
+  - Calculate offset and slice array
+  - Return `{ data, total, page, limit }`
+
+- **`findActive()`** - Get only active users
+
+  - Filter users with `isActive === true`
+  - Use `isNewUser()` type guard
+
+- **`findOne(id)`** - Get single user
+
+  - Find by id
+  - Throw `NotFoundException` if not found
+
+- **`remove(id)`** - Delete user
+
+  - Find by id
+  - Throw `NotFoundException` if not found
+  - Remove from array and save
+
+- **`clearAll()`** - Delete all users
+  - Clear array and save empty file
+  - Used for test cleanup
+
+### 3. **TasksController** (`src/tasks/tasks.controller.ts`)
+
+Implementa gli endpoint:
+
+- **`POST /tasks`** - Crea task pesante
+
+  - Riceve `CreateTaskDto` nel body
+  - Chiama `tasksService.createHeavyTask()`
+  - Ritorna task con status 'processing'
+
+- **`GET /tasks/:id`** - Stato del task
+  - Riceve `id` come param
+  - Chiama `tasksService.getTaskStatus(id)`
+  - Ritorna task con status aggiornato o 404
+
+### 4. **TasksService** (`src/tasks/tasks.service.ts`)
+
+Implementa:
+
+- **`createHeavyTask(createTaskDto)`**
+
+  - Generate UUID for taskId
+  - Create task with status 'processing'
+  - Launch worker thread
+  - Handle worker messages to update status
+  - Return task immediately
+
+- **`getTaskStatus(taskId)`**
+  - Retrieve task from Map
+  - Throw `NotFoundException` if not found
+
+### 5. **Worker Thread** (`src/tasks/workers/heavy-task.worker.ts`)
+
+Implementa computazione pesante:
+
+- Receive `iterations` from `workerData`
+- Perform CPU-intensive task (e.g., find sum of prime numbers)
+- Send result back via `parentPort.postMessage()`
+
+### ✅ GIÀ IMPLEMENTATO
+
+- Struttura NestJS (modules, DTOs)
+- Validazione con class-validator
+- Health check endpoint (funzionante)
+- Test suite completa (29 test)
+- Configurazione TypeScript e build
+- File-based data persistence setup
+- Scheletro dei controller con decoratori di routing
+
 ---
 
 ## 📋 SPECIFICHE TECNICHE
@@ -85,16 +215,55 @@ src/
 
 ---
 
-## 🧪 TEST AUTOMATICO
+## 🧪 VERIFICA IMPLEMENTAZIONE
 
-### Test Jest
+### Step 1: Avvia il server
 
 ```bash
-npm test              # esegue tutti i test
-npm run test:watch    # modalità watch
+npm run start:dev
 ```
 
-I test Jest in `__tests__/api.test.ts` sono esempi da completare dopo l'implementazione.
+### Step 2: Test manuali
+
+```bash
+# Health check (dovrebbe già funzionare)
+curl http://localhost:3000/health
+
+# Crea utente (da implementare)
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@example.com"}'
+
+# Ottieni utenti (da implementare)
+curl http://localhost:3000/users?page=1&limit=10
+```
+
+### Step 3: Abilita ed esegui i test
+
+1. Apri `__tests__/api.test.ts`
+2. Rimuovi `.skip` dalle descrizioni dei test (es. `describe.skip` → `describe`)
+3. Esegui i test:
+
+```bash
+npm test
+```
+
+**Stato attuale:**
+
+- ✅ 1 test passa (health check)
+- ⏭️ 28 test skipped (da implementare)
+
+**Criterio di successo:** Tutti i 29 test dovrebbero passare ✅
+
+### Esempio di rimozione skip
+
+```typescript
+// Prima (test disabilitato)
+describe.skip("POST /users", () => {
+
+// Dopo (test abilitato)
+describe("POST /users", () => {
+```
 
 ---
 
@@ -160,6 +329,7 @@ npm run test:api
 7. **Exception Handling:**
    - Usa built-in exceptions: `NotFoundException`, `ConflictException`, `BadRequestException`
    - NestJS converte automaticamente le exceptions in response HTTP corrette
+   - Esempio: `throw new NotFoundException('User not found')` → HTTP 404 automatico
 8. **Worker Threads:** Usa `worker_threads` per task pesanti
    - Crea un file worker separato (es. `heavy-task.worker.ts`)
    - Crea un modulo/service dedicato per gestire i task
@@ -202,6 +372,14 @@ Crea un `Dockerfile` per containerizzare il web server
 - **Validazione:** Automatica con class-validator e ValidationPipe
 - **Testing:** Jest con supporto NestJS Testing utilities
 - **Build:** `nest build` compila il progetto in JavaScript
+
+---
+
+## 📚 RISORSE UTILI
+
+- [NestJS Documentation](https://docs.nestjs.com/)
+- [class-validator](https://github.com/typestack/class-validator)
+- [Node.js Worker Threads](https://nodejs.org/api/worker_threads.html)
 
 ---
 

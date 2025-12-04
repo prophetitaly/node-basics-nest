@@ -1,13 +1,8 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-} from "@nestjs/common";
-import { v4 as uuidv4 } from "uuid";
-import { CreateUserDto } from "./dto/create-user.dto";
-import { User, isNewUser } from "./entities/user.entity";
+import { Injectable } from "@nestjs/common";
 import * as fs from "fs";
 import * as path from "path";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { User } from "./entities/user.entity";
 
 @Injectable()
 export class UsersService {
@@ -37,64 +32,42 @@ export class UsersService {
   }
 
   create(createUserDto: CreateUserDto): User {
-    // Check for duplicate email
-    const existingUser = this.users.find(
-      (user) => user.email === createUserDto.email
-    );
-    if (existingUser) {
-      throw new ConflictException("Email already exists");
-    }
-
-    const newUser: User = {
-      id: uuidv4(),
-      name: createUserDto.name,
-      email: createUserDto.email,
-      createdAt: new Date().toISOString(),
-    };
-
-    this.users.push(newUser);
-    this.saveUsers();
-    return newUser;
+    // TODO: Implement user creation
+    // - Check for duplicate email
+    // - Generate UUID for id
+    // - Create user with createdAt timestamp
+    // - Return created user
+    throw new Error("Not implemented");
   }
 
   findAll(
     page: number = 1,
     limit: number = 10
   ): { data: User[]; total: number; page: number; limit: number } {
-    // Validate and correct pagination parameters
-    const validPage = page > 0 ? page : 1;
-    const validLimit = limit > 0 ? limit : 10;
-
-    const offset = (validPage - 1) * validLimit;
-    const paginatedUsers = this.users.slice(offset, offset + validLimit);
-
-    return {
-      data: paginatedUsers,
-      total: this.users.length,
-      page: validPage,
-      limit: validLimit,
-    };
+    // TODO: Implement pagination
+    // - Validate page and limit (must be > 0)
+    // - Return paginated data with metadata
+    throw new Error("Not implemented");
   }
 
   findActive(): User[] {
-    return this.users.filter((user) => isNewUser(user) && user.isActive);
+    // TODO: Implement active users filter
+    // - Filter users with isActive === true
+    throw new Error("Not implemented");
   }
 
   findOne(id: string): User {
-    const user = this.users.find((user) => user.id === id);
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-    return user;
+    // TODO: Implement find user by id
+    // - Find user by id
+    throw new Error("Not implemented");
   }
 
   remove(id: string): void {
-    const index = this.users.findIndex((user) => user.id === id);
-    if (index === -1) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-    this.users.splice(index, 1);
-    this.saveUsers();
+    // TODO: Implement user deletion
+    // - Find user by id
+    // - Throw NotFoundException if not found
+    // - Remove from array and save to file
+    throw new Error("Not implemented");
   }
 
   // Method for testing - clear all users

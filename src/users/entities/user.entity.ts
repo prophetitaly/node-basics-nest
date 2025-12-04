@@ -10,7 +10,3 @@ export interface NewUser extends LegacyUser {
 }
 
 export type User = LegacyUser | NewUser;
-
-export function isNewUser(user: User): user is NewUser {
-  return "isActive" in user;
-}
