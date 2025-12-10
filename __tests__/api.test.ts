@@ -2,6 +2,8 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import { readFile, writeFile } from "fs/promises";
+import { join } from "path";
 
 /**
  * Test Suite per API REST Users
@@ -17,8 +19,23 @@ import { AppModule } from "../src/app.module";
 describe("Users API Tests", () => {
   let app: INestApplication;
   let createdUserId: string;
+  let originalData: string;
+
+  const usersFilePath = join(process.cwd(), "data", "users.json");
+  const backupFilePath = join(process.cwd(), "data", "users.json.back");
 
   beforeAll(async () => {
+    // Backup dei dati originali prima di tutti i test
+    try {
+      originalData = await readFile(usersFilePath, "utf-8");
+      await writeFile(backupFilePath, originalData);
+    } catch (error) {
+      // Se il file non esiste, crea uno vuoto
+      originalData = "[]";
+      await writeFile(usersFilePath, originalData);
+      await writeFile(backupFilePath, originalData);
+    }
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -36,6 +53,13 @@ describe("Users API Tests", () => {
 
   afterAll(async () => {
     await app.close();
+
+    // Ripristina i dati originali dopo tutti i test
+    try {
+      await writeFile(usersFilePath, originalData);
+    } catch (error) {
+      console.error("Failed to restore original data:", error);
+    }
   });
 
   describe("GET /health", () => {
